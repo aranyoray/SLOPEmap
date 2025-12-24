@@ -1,0 +1,88 @@
+/* NREL SLOPE Dashboard Styles */
+
+body {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f5f6fa;
+}
+
+.dash-table-container {
+    margin: 20px 0;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.stat-card h3 {
+    margin: 0;
+    font-size: 2.5em;
+    color: #3498db;
+}
+
+.stat-card p {
+    margin: 10px 0 0 0;
+    color: #7f8c8d;
+    font-size: 1em;
+}
+
+/* Chart containers */
+.chart-container {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Dropdown styles */
+.Select-control {
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+.Select-menu-outer {
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Table styles */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+}
+
+table th {
+    background-color: #3498db;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+}
+
+table td {
+    padding: 12px;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+table tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .stat-card h3 {
+        font-size: 1.8em;
+    }
+
+    .chart-container {
+        margin: 10px;
+        padding: 10px;
+    }
+}
