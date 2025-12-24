@@ -32,6 +32,9 @@ data/raw/screenshots/
 data/processed/*.json
 data/processed/*.csv
 
+# EXCEPT: Allow dashboard data for Vercel deployment
+!dashboard/data/dashboard_data.json
+
 # IDE
 .vscode/
 .idea/
