@@ -1,0 +1,46 @@
+# Ignore unnecessary files for Vercel deployment
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Data directories (except dashboard data)
+data/raw/
+data/processed/
+
+# Scraper files (not needed on server)
+scraper/
+
+# Development files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Documentation (optional, can include if you want)
+USAGE_GUIDE.md
+SCRAPING_RESULTS.md
+
+# Scripts (not needed on server)
+*.sh
+setup.py
+
+# Utilities (not needed on server)
+utils/
+
+# Other
+.DS_Store
+*.log
+.env
