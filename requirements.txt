@@ -1,0 +1,14 @@
+playwright==1.41.2
+beautifulsoup4==4.12.3
+pandas==2.2.0
+geopandas==0.14.3
+folium==0.15.1
+Flask==3.0.2
+aiohttp==3.9.3
+asyncio==3.4.3
+numpy==1.26.4
+plotly==5.18.0
+dash==2.16.1
+requests==2.31.0
+lxml==5.1.0
+tqdm==4.66.2
