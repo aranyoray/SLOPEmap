@@ -63,8 +63,24 @@ class ScraperAgent:
         print(f"[Agent {self.agent_id}] Scraping {geoid}...")
 
         try:
-            # Navigate to page
-            await self.page.goto(url, wait_until='networkidle', timeout=self.timeout)
+            # Navigate to page and capture response
+            response = await self.page.goto(url, wait_until='networkidle', timeout=self.timeout)
+            
+            # Check HTTP status code
+            if response:
+                status = response.status
+                if status == 404:
+                    print(f"[Agent {self.agent_id}] ✗ 404 Not Found for {geoid}")
+                    return self.create_error_record(geoid, "404 not found")
+                elif status >= 400:
+                    print(f"[Agent {self.agent_id}] ✗ HTTP {status} error for {geoid}")
+                    return self.create_error_record(geoid, f"HTTP {status} error")
+            else:
+                # Check page content for 404 indicators
+                page_content = await self.page.content()
+                if '404' in page_content or 'not found' in page_content.lower() or 'page not found' in page_content.lower():
+                    print(f"[Agent {self.agent_id}] ✗ 404 Not Found (detected in content) for {geoid}")
+                    return self.create_error_record(geoid, "404 not found")
 
             # Wait for content to load
             await asyncio.sleep(3)
