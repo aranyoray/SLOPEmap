@@ -44,9 +44,52 @@ class ScraperAgent:
         self.browser = await playwright.chromium.launch(headless=self.headless)
         self.context = await self.browser.new_context(
             viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            # Ignore HTTPS errors for third-party scripts
+            ignore_https_errors=True
         )
         self.page = await self.context.new_page()
+        
+        # Suppress console errors from third-party scripts (analytics, tracking, etc.)
+        # These don't affect the page content
+        async def handle_console(msg):
+            # Suppress all console messages from third-party scripts
+            text = msg.text.lower()
+            # Ignore common third-party script errors and warnings
+            ignore_patterns = [
+                'analytics', 'crazyegg', 'google-analytics', 'atob', 'chext', 
+                'chext_loader', 'chext_driver', 'doubleclick', 'googletagmanager',
+                'third-party cookie', 'failed to load resource', 'reading \'type\'',
+                'cannot read properties', 'undefined'
+            ]
+            if any(pattern in text for pattern in ignore_patterns):
+                return
+            # Only log truly critical errors that might affect scraping
+            if msg.type == 'error' and not any(pattern in text for pattern in ignore_patterns):
+                # Only log if it's not a known third-party error
+                pass  # Suppress all console output for cleaner logs
+        
+        self.page.on('console', handle_console)
+        
+        # Suppress failed requests for third-party resources
+        async def handle_request_failed(request):
+            url = request.url.lower()
+            # Suppress failures for analytics, tracking, and other third-party scripts
+            ignore_patterns = [
+                'analytics', 'crazyegg', 'google-analytics', 'doubleclick', 
+                'googletagmanager', 'script.crazyegg', 'g/collect',
+                '.js', '.css', '.png', '.jpg', '.gif', '.svg',  # Static assets
+                'transportation.energy', 'assets/'  # NREL static assets
+            ]
+            if any(pattern in url for pattern in ignore_patterns):
+                return
+            # Only log API/data request failures that might be important
+            if 'api' in url or 'data' in url:
+                # Suppress these too as they're often expected to fail for some GeoIDs
+                return
+        
+        self.page.on('requestfailed', handle_request_failed)
+        
         print(f"[Agent {self.agent_id}] Initialized")
 
     async def scrape_county(self, geoid):
@@ -64,7 +107,21 @@ class ScraperAgent:
 
         try:
             # Navigate to page and capture response
-            response = await self.page.goto(url, wait_until='networkidle', timeout=self.timeout)
+            # Use 'domcontentloaded' instead of 'networkidle' to avoid waiting for analytics/tracking scripts
+            response = await self.page.goto(url, wait_until='domcontentloaded', timeout=self.timeout)
+            
+            # Wait for content to load and JavaScript to execute
+            # Give extra time for dynamic content to render
+            await asyncio.sleep(5)
+            
+            # Wait for main content elements to be visible
+            try:
+                # Wait for body to be ready
+                await self.page.wait_for_selector('body', timeout=5000)
+                # Try to wait for any main content indicators
+                await asyncio.sleep(2)
+            except:
+                pass  # Continue even if specific selectors aren't found
             
             # Check HTTP status code
             if response:
@@ -75,15 +132,19 @@ class ScraperAgent:
                 elif status >= 400:
                     print(f"[Agent {self.agent_id}] ✗ HTTP {status} error for {geoid}")
                     return self.create_error_record(geoid, f"HTTP {status} error")
-            else:
-                # Check page content for 404 indicators
-                page_content = await self.page.content()
-                if '404' in page_content or 'not found' in page_content.lower() or 'page not found' in page_content.lower():
-                    print(f"[Agent {self.agent_id}] ✗ 404 Not Found (detected in content) for {geoid}")
-                    return self.create_error_record(geoid, "404 not found")
-
-            # Wait for content to load
-            await asyncio.sleep(3)
+            
+            # Check page title - valid pages have county name in title, invalid ones don't
+            page_title = await self.page.title()
+            # Valid pages have format like "Autauga County, AL Energy Snapshot..."
+            # Invalid pages just have "Energy Snapshot | State and Local Planning..." (no county name)
+            if page_title:
+                # Invalid GeoID pages start with "Energy Snapshot |" 
+                # Valid pages have location name before "Energy Snapshot" (e.g., "County,", "Parish,", "Borough,")
+                # Check for patterns like "County," or "Parish," or "Borough," which indicate a valid location
+                if page_title.startswith('Energy Snapshot |'):
+                    # This is likely an invalid GeoID - no location name in title
+                    print(f"[Agent {self.agent_id}] ✗ 404 Not Found (no county in title) for {geoid}")
+                    return self.create_error_record(geoid, "404 not found - invalid GeoID")
 
             # Extract data from the page
             data = await self.extract_data(geoid)
