@@ -9,10 +9,10 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from tqdm import tqdm
+from playwright.async_api import async_playwright
 
 sys.path.append(str(Path(__file__).parent.parent))
 from utils.data_storage import DataStorage
-from scraper.scraper_agent import ScraperAgent
 
 
 class URLBasedScraper:
@@ -38,32 +38,88 @@ class URLBasedScraper:
         print(f"✓ Loaded {len(urls_data)} counties to scrape")
         return urls_data
 
+    async def scrape_url(self, browser, url, geoid, source_name):
+        """Scrape a single URL"""
+        context = await browser.new_context()
+        page = await context.new_page()
+
+        try:
+            await page.goto(url, wait_until='networkidle', timeout=15000)
+            await asyncio.sleep(2)
+
+            # Extract data
+            data = {
+                'geoid': geoid,
+                'url': url,
+                'source': source_name,
+                'timestamp': datetime.now().isoformat(),
+                'status': 'success'
+            }
+
+            # Get page title
+            data['page_title'] = await page.title()
+
+            # Get page content
+            data['page_content'] = await page.evaluate('() => document.body.innerText')
+
+            # Try to extract metrics
+            try:
+                stats = await page.evaluate('''() => {
+                    const stats = {};
+                    const dataElements = document.querySelectorAll('[class*="metric"], [class*="stat"], [class*="value"]');
+                    dataElements.forEach((el, idx) => {
+                        stats[`metric_${idx}`] = el.innerText.trim();
+                    });
+                    return stats;
+                }''')
+                data['extracted_stats'] = stats
+            except:
+                data['extracted_stats'] = {}
+
+            return data
+
+        except Exception as e:
+            return {
+                'geoid': geoid,
+                'url': url,
+                'source': source_name,
+                'timestamp': datetime.now().isoformat(),
+                'status': 'error',
+                'error': str(e)
+            }
+
+        finally:
+            await page.close()
+            await context.close()
+
     async def scrape_county_urls(self, agent_id, county_data_list, pbar=None):
         """Scrape both URLs for each county"""
-        agent = ScraperAgent(agent_id=agent_id, headless=True, timeout=15000)
+        playwright = await async_playwright().start()
+        browser = await playwright.chromium.launch(headless=True)
         results = []
 
         try:
-            await agent.initialize()
-
             for county_data in county_data_list:
                 geoid = county_data['geoid']
+                url1 = county_data.get('url_energy_snapshot', '')
+                url2 = county_data.get('url_data_viewer', '')
 
                 # Scrape energy snapshot
-                result1 = await agent.scrape_county(geoid)
-                result1['source'] = 'energy-snapshot'
-                result1['source_url'] = county_data['url_energy_snapshot']
-
-                # Small delay
-                await asyncio.sleep(0.5)
+                if url1:
+                    result1 = await self.scrape_url(browser, url1, geoid, 'energy-snapshot')
+                    await asyncio.sleep(0.5)
+                else:
+                    result1 = {'geoid': geoid, 'status': 'skipped', 'source': 'energy-snapshot'}
 
                 # Scrape data viewer
-                result2 = await agent.scrape_county(geoid)
-                result2['source'] = 'data-viewer'
-                result2['source_url'] = county_data['url_data_viewer']
+                if url2:
+                    result2 = await self.scrape_url(browser, url2, geoid, 'data-viewer')
+                    await asyncio.sleep(0.5)
+                else:
+                    result2 = {'geoid': geoid, 'status': 'skipped', 'source': 'data-viewer'}
 
                 # Merge both results
-                merged_result = self.merge_results(result1, result2)
+                merged_result = self.merge_results(geoid, result1, result2)
                 results.append(merged_result)
 
                 # Save immediately
@@ -78,16 +134,43 @@ class URLBasedScraper:
             print(f"\n[Agent {agent_id}] Error: {e}")
 
         finally:
-            await agent.cleanup()
+            await browser.close()
+            await playwright.stop()
 
         return results
 
-    def merge_results(self, result1, result2):
+    def merge_results(self, geoid, result1, result2):
         """Merge data from both URLs"""
-        merged = result1.copy()
-        merged['data_viewer_content'] = result2.get('page_content', '')
-        merged['data_viewer_stats'] = result2.get('extracted_stats', {})
-        merged['sources'] = [result1.get('source_url'), result2.get('source_url')]
+        merged = {
+            'geoid': geoid,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'success' if (result1.get('status') == 'success' or result2.get('status') == 'success') else 'error'
+        }
+
+        # Add energy snapshot data
+        if result1.get('status') == 'success':
+            merged['energy_snapshot_title'] = result1.get('page_title', '')
+            merged['energy_snapshot_content'] = result1.get('page_content', '')
+            merged['energy_snapshot_stats'] = result1.get('extracted_stats', {})
+
+        # Add data viewer data
+        if result2.get('status') == 'success':
+            merged['data_viewer_title'] = result2.get('page_title', '')
+            merged['data_viewer_content'] = result2.get('page_content', '')
+            merged['data_viewer_stats'] = result2.get('extracted_stats', {})
+
+        # Add source URLs
+        merged['sources'] = {
+            'energy_snapshot': result1.get('url', ''),
+            'data_viewer': result2.get('url', '')
+        }
+
+        # Track errors
+        if result1.get('status') == 'error':
+            merged['energy_snapshot_error'] = result1.get('error', '')
+        if result2.get('status') == 'error':
+            merged['data_viewer_error'] = result2.get('error', '')
+
         return merged
 
     async def run(self):
@@ -137,9 +220,11 @@ class URLBasedScraper:
         # Stats
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
+        successful = sum(1 for r in self.results if r.get('status') == 'success')
 
         print(f"\n{'='*70}")
         print(f"Scraped: {len(self.results)} counties in {duration:.1f}s")
+        print(f"Successful: {successful} ({successful/len(self.results)*100:.1f}%)")
         print(f"{'='*70}\n")
 
         # Save
