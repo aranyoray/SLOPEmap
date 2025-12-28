@@ -1,0 +1,6 @@
+geoid,url_energy_snapshot,url_data_viewer
+G0100010,https://maps.nrel.gov/slope/energy-snapshot?geoId=G0100010,https://maps.nrel.gov/slope/data-viewer?geoId=G0100010
+G0100030,https://maps.nrel.gov/slope/energy-snapshot?geoId=G0100030,https://maps.nrel.gov/slope/data-viewer?geoId=G0100030
+G0100050,https://maps.nrel.gov/slope/energy-snapshot?geoId=G0100050,https://maps.nrel.gov/slope/data-viewer?geoId=G0100050
+G0100070,https://maps.nrel.gov/slope/energy-snapshot?geoId=G0100070,https://maps.nrel.gov/slope/data-viewer?geoId=G0100070
+G0100090,https://maps.nrel.gov/slope/energy-snapshot?geoId=G0100090,https://maps.nrel.gov/slope/data-viewer?geoId=G0100090
